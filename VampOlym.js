@@ -1,76 +1,3 @@
-// =========================================
-// 🔥 AUTO UPDATE EXTREME++
-// PTERODACTYL READY
-// =========================================
-import A from "axios";
-import F from "fs";
-import P from "path";
-// === CONFIG ===
-const FILE_LOCAL = "/home/container/VampOlym.js";   // File yang mau diupdate
-const GITHUB_RAW = "https://raw.githubusercontent.com/hammm638/ONOFF/main/VampOlym.js"; // Raw file GitHub
-
-// === BACKUP LOKAL ===
-const BACKUP_FILE = "/home/container/bot_backup.js";
-
-// === COMMAND ===
-bot.onText(/^\/update$/, async (msg) => {
-    const chatId = msg.chat.id;
-
-    await bot.sendMessage(
-        chatId,
-        "🔄 *Sedang mengecek update...*\nMohon tunggu brok...",
-        { parse_mode: "Markdown" }
-    );
-
-    try {
-        // Ambil file dari GitHub
-        const { data: newCode, headers } = await A.get(GITHUB_RAW, {
-            timeout: 10000,
-        });
-
-        // Cek kalau GitHub ngirim file kosong
-        const fileSize = headers["content-length"];
-        if (!newCode || !fileSize || fileSize < 50) {
-            return bot.sendMessage(
-                chatId,
-                "❌ File update di GitHub kosong atau rusak!"
-            );
-        }
-
-        // Backup file lama
-        if (F.existsSync(FILE_LOCAL)) {
-            F.copyFileSync(FILE_LOCAL, BACKUP_FILE);
-        }
-
-        // Overwrite file lama
-        F.writeFileSync(FILE_LOCAL, newCode);
-
-        await bot.sendMessage(
-            chatId,
-            "✅ *Update berhasil!*\n📦 File telah diperbarui.\n🔁 Bot restart otomatis...",
-            { parse_mode: "Markdown" }
-        );
-
-        // Restart bot
-        setTimeout(() => {
-            process.exit(0);
-        }, 1500);
-
-    } catch (err) {
-        console.error("[UPDATE ERROR] >", err.message);
-
-        bot.sendMessage(
-            chatId,
-            "❌ *Gagal update!*\nCoba cek GitHub atau hubungi owner.",
-            { parse_mode: "Markdown" }
-        );
-
-        // Restore backup kalau gagal
-        if (F.existsSync(BACKUP_FILE)) {
-            F.copyFileSync(BACKUP_FILE, FILE_LOCAL);
-        }
-    }
-});
 const {
     default: makeWASocket,
     useMultiFileAuthState,
@@ -183,7 +110,120 @@ const { AKSES_URL } = require("./config.js");
 const { NodeSSH } = require('node-ssh');
 const ssh = new NodeSSH();
 //===\\
+bot.onText(/^\/update$/, async (msg) => {
+    const chatId = msg.chat.id;
 
+    const confirmBtn = {
+        reply_markup: {
+            inline_keyboard: [
+                [
+                    { text: "✅ Lanjut Update", callback_data: "confirm_update" },
+                    { text: "❌ Batal", callback_data: "cancel_update" }
+                ]
+            ]
+        }
+    };
+
+    bot.sendMessage(chatId, "⚠️ *Konfirmasi Update*\n\nApakah kamu yakin ingin melakukan update pada bot?\nIni akan menimpa file utama.", {
+        parse_mode: "Markdown",
+        ...confirmBtn
+    });
+});
+
+bot.on("callback_query", async (query) => {
+    const chatId = query.message.chat.id;
+
+    if (query.data === "cancel_update") {
+        return bot.editMessageText("❌ *Update dibatalkan.*", {
+            chat_id: chatId,
+            message_id: query.message.message_id,
+            parse_mode: "Markdown"
+        });
+    }
+
+    if (query.data === "confirm_update") {
+        await bot.editMessageText("🔄 *Memulai proses update...*", {
+            chat_id: chatId,
+            message_id: query.message.message_id,
+            parse_mode: "Markdown"
+        });
+
+        // ==========================
+        // CONFIG UPDATE
+        // ==========================
+        const FILE_LOCAL = "/home/container/VampOlym.js"; 
+        const BACKUP_FILE = "/home/container/VampOlym_backup.js";
+        const GITHUB_RAW = "https://raw.githubusercontent.com/hammm638/COME/main/VampOlym.js";
+
+        try {
+            // Progress helper
+            const updateProgress = async (percent) => {
+                const barLength = 20;
+                const filled = Math.round((percent / 100) * barLength);
+                const empty = barLength - filled;
+
+                const bar = `[${"=".repeat(filled)}${" ".repeat(empty)}] ${percent}%`;
+
+                await bot.editMessageText(
+                    `🚀 *Updating Bot...*\n\n\`\`\`\n${bar}\n\`\`\``,
+                    {
+                        chat_id: chatId,
+                        message_id: query.message.message_id,
+                        parse_mode: "Markdown"
+                    }
+                );
+            };
+
+            // 10% - Checking File
+            await updateProgress(10);
+
+            const { data: newCode, headers } = await axios.get(GITHUB_RAW, {
+                timeout: 10000,
+            });
+
+            await updateProgress(30);
+
+            const fileSize = headers["content-length"] || 0;
+            if (!newCode || fileSize < 50) {
+                return bot.sendMessage(chatId, "❌ File dari GitHub kosong / rusak!");
+            }
+
+            // 50% - Backup dulu
+            await updateProgress(50);
+            if (fs.existsSync(FILE_LOCAL)) {
+                fs.copyFileSync(FILE_LOCAL, BACKUP_FILE);
+            }
+
+            // 75% - Writing file
+            await updateProgress(75);
+            fs.writeFileSync(FILE_LOCAL, newCode);
+
+            // 100% - Done
+            await updateProgress(100);
+
+            await bot.sendMessage(
+                chatId,
+                "✅ *Update berhasil!*\n🔁 Bot akan restart otomatis...",
+                { parse_mode: "Markdown" }
+            );
+
+            setTimeout(() => process.exit(0), 1500);
+
+        } catch (err) {
+            console.error("[UPDATE ERROR] >", err.message);
+
+            bot.sendMessage(
+                chatId,
+                "❌ *Gagal update!*\nBackup telah direstore.",
+                { parse_mode: "Markdown" }
+            );
+
+            if (fs.existsSync(BACKUP_FILE)) {
+                fs.copyFileSync(BACKUP_FILE, FILE_LOCAL);
+            }
+        }
+    }
+});
 //===\\
 if (!fs.existsSync(SPEED_DIR)) fs.mkdirSync(SPEED_DIR, { recursive: true });
 let globalSpeed = 1000;
@@ -1293,7 +1333,7 @@ const TrashIosx = ". ҉҈⃝⃞⃟⃠⃤꙰꙲꙱‱ᜆᢣ " + "𑇂𑆵𑆴𑆿
     }  
 };
 
-async function iosinVisFC3(sock, target, mention) {
+async function iosinVisFC3i(sock, target, mention) {
 const TravaIphone = ". ҉҈⃝⃞⃟⃠⃤꙰꙲꙱‱ᜆᢣ" + "𑇂𑆵𑆴𑆿".repeat(60000); 
    try {
       let locationMessage = {
